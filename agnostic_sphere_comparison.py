@@ -1,6 +1,7 @@
 import random 
 import numpy as np
 from math import log, ceil
+from itertools import combinations
 
 import networkx as nx
 
@@ -36,9 +37,8 @@ max_node = max(nodes)
 
 d = 2.0 * len(edges) / len(nodes)
 
-# TODO still mysterious what r' should be
 global_r = ceil(3.0 / 4.0 * log(len(nodes)) / log(d)) 
-global_r_ = 1
+global_r_ = 1 # TODO still mysterious what r' should be
 
 c = 0.1
 E = {e for e in edges if random.random() < c}
@@ -92,53 +92,52 @@ def sign_stat(v, v_, r = global_r, r_ = global_r_):
     z = mutual_nbor_count(r+2, r_, v, v_)
     return x*z - y*y
 
-# select 5 vertices randomly and compute pairwise sign statistics
-v = random.sample(nodes, 5)
-sign_stats = np.zeros((len(v), len(v)))
-for i in range(len(v)):
-    for j in range(len(v)):
-        sign_stats[i][j] = sign_stat(v[i], v[j])
+def partition(vertices, stats):
+    """ Returns a consistent partition of the vertices into two groups:
+        i.e. stats[i, j] > 0 iff i and j are in the same group
+        Throws an exception if none exists.
+    """
+    assert len(vertices) == stats.shape[0] == stats.shape[1]
+    vertices = np.array(vertices)
+    signs = (stats > 0)
+    indices = np.arange(len(vertices))
 
-print "v:", v
-print "sign_stats:\n", sign_stats.astype(int)
-
-# check if there exists a consistent partition of these vertices
-#   i.e. sign_stat[v_i, v_j] > 0 iff v_i and v_j are in the same community
-for i in range(2**len(v)):
-    split1 = []
-    split2 = []
-    j = i
-    ctr = 0
-    while j:
-        if j%2:
-            split1.append(ctr)
-        else:
-            split2.append(ctr)
-        ctr = ctr+1
-        j >>= 1
-    if not len(split1) or not len(split2):
-        continue
-    partition = True
-    for u in split1:
-        for w in split2:
-            if sign_stats[u][w] > 0:
-                partition = False
-    for u in split1:
-        for w in split1:
-            if sign_stats[u][w] <= 0:
-                partition = False
-    for u in split2:
-        for w in split2:
-            if sign_stats[u][w] <= 0:
-                partition = False
+    # check symmetry
+    for i in indices:
+        for j in indices:
+            if signs[i][j] != signs[j][i]:
+                raise ValueError("Sign of (%s, %s) = %s is inconsistent with (%s, %s) = %s" 
+                    % (vertices[i], vertices[j], stats[i, j],
+                        vertices[j], vertices[i], stats[j, i]))
+    A = [indices[0]]
+    B = []
     
-    if partition:
-        anchor1 = split1[0]
-        anchor2 = split2[0]
-        break
+    for i in indices[1:]:
+        if np.all(signs[i,A]) and not np.any(signs[i,B]):
+            A.append(i)
+        elif np.all(signs[i,B]) and not np.any(signs[i,A]):
+            B.append(i)
+        else:
+            raise ValueError("No consistent way to assign %s into %s or %s" % 
+                (vertices[i], vertices[A], vertices[B]))
 
-if not partition:
-    raise Exception("couldn't find partition")
+    if len(B) == 0:
+        raise ValueError("All of the nodes are in the same partition")
+
+    return (vertices[A], vertices[B])
+
+# select 5 vertices randomly and compute pairwise sign statistics
+vs = random.sample(nodes, 5)
+sign_stats = np.zeros((len(vs), len(vs)))
+for i in range(len(vs)):
+    for j in range(len(vs)):
+        sign_stats[i][j] = sign_stat(vs[i], vs[j])
+
+print "vs:", vs
+print "int(sign_stats):\n", sign_stats.astype(int)
+
+C1, C2 = partition(vs, sign_stats)
+print "C1, C2:", C1, C2
 
 # TODO: for each other node w, assign it to maximize sign_stat(anchor(community), w)
 
