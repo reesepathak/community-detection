@@ -2,60 +2,79 @@ import random
 import numpy as np
 from math import log, ceil
 
-random.seed(1)
+import networkx as nx
 
-# the total number of nodes in the dataset, including 0-degree nodes
-n = 1490 
-# TODO: why are there 1490 nodes? the original paper says 1494
-# they also talk about filtering them
-# AND the final community numbers don't add up properly
+random.seed(1)
 
 # load blog data
 with open('data/polblogs.gml', 'r') as f:
-    raw = f.readlines()
+    data = f.readlines()
 
-edges = set()
-for r, line in enumerate(raw):
+raw_edges = set()
+labels = {}
+for row, line in enumerate(data):
+    if ' node ' in line:
+        v = int(data[row+1].strip().split()[1])
+        v -= 1 # shift to 0-indexing
+        labels[v] = int(data[row+3].strip().split()[1])
+
     if ' edge ' in line:
-        v1 = int(raw[r+1].strip().split()[1]) - 1
-        v2 = int(raw[r+2].strip().split()[1])
+        v1 = int(data[row+1].strip().split()[1])
+        v2 = int(data[row+2].strip().split()[1])
         if v1 == v2: continue
         v1, v2 = (v1 - 1, v2 - 1) # shift to 0-indexing
         e = (v1, v2) if v1 < v2 else (v2, v1)
-        edges.add(e)
-d = 2.0 * len(edges) / n
+        raw_edges.add(e)
 
-global_r = ceil(3.0 / 4.0 * log(n) / log(d)) # ASSUME r = r' 
-# TODO: should this be ceil or floor?
+# use networkx to find the largest component
+G = nx.Graph()
+G.add_edges_from(raw_edges)
+Gc = max(nx.connected_component_subgraphs(G), key=len)
+edges = set(Gc.edges())
+nodes = Gc.nodes()
+max_node = max(nodes)
+
+d = 2.0 * len(edges) / len(nodes)
+
+# TODO still mysterious what r' should be
+global_r = ceil(3.0 / 4.0 * log(len(nodes)) / log(d)) 
+global_r_ = 1
 
 c = 0.1
 E = {e for e in edges if random.random() < c}
 g_minus_e = edges - E
 
-adj = np.zeros(n, dtype=object)
-for i in range(n):
-    adj[i] = set()
+adj = {}
+for v in nodes:
+    adj[v] = set()
 for (v1, v2) in g_minus_e:
     adj[v1].add(v2)
     adj[v2].add(v1)
 
 def nbors(r, v):
-    """nbors[r, v] := his N_{r[G\E]}(v)"""
-    depth = np.zeros(n, dtype=int)
-    visited = np.zeros(n, dtype=bool)
+    """aka his N_{r[G\E]}(v)"""
+    depth = np.zeros(max_node + 1, dtype=int)
+    visited = np.zeros(max_node + 1, dtype=bool)
     bfs_queue = [v]
     visited[v] = True
+
+    ok = []
     while len(bfs_queue) > 0:
         front = bfs_queue.pop()
         for nbor in adj[front]:
             if not visited[nbor]:
-                depth[nbor] = depth[front]+1
                 visited[nbor] = True
-                bfs_queue.append(nbor)
-    return [v for v in range(n) if depth[v] == r]
 
-def nbor_mutuals(r, r_, v, v_):
-    """nbor_mutuals[r, v, v2] := his N_{r, r' [E]}(v, v')"""
+                depth[nbor] = depth[front] + 1
+
+                if depth[nbor] == r:
+                    ok.append(nbor)
+                else:
+                    bfs_queue.append(nbor)
+    return ok
+
+def mutual_nbor_count(r, r_, v, v_):
+    """aka N_{r, r' [E]}(v, v_)"""
     nbor_rv = nbors(r, v)
     nbor_r_v_ = nbors(r_, v_)
     
@@ -66,28 +85,22 @@ def nbor_mutuals(r, r_, v, v_):
                 count +=1
     return count
 
-def sign_stat(v, v_, r = global_r, r_ = global_r):
-    """sign_stat[v, v2] := his I_{global_r, global_r, [E]}(v, v')"""
-    x = nbor_mutuals(r, r_, v, v_)
-    y = nbor_mutuals(r+1, r_, v, v_)
-    z = nbor_mutuals(r+2, r_, v, v_)
+def sign_stat(v, v_, r = global_r, r_ = global_r_):
+    """aka I_{global_r, global_r, [E]}(v, v_)"""
+    x = mutual_nbor_count(r, r_, v, v_)
+    y = mutual_nbor_count(r+1, r_, v, v_)
+    z = mutual_nbor_count(r+2, r_, v, v_)
     return x*z - y*y
 
-
-# try to find a partition such that sign_stat(v_i, v_j) > 0 
-#   iff v_i and v_j are in the same community
-#   if we can't, fail
-#   if we can, pick a random node from each community to be our anchor
-#
-
 # select 5 vertices randomly and compute pairwise sign statistics
-v = random.sample(xrange(n), 5)
+v = random.sample(nodes, 5)
 sign_stats = np.zeros((len(v), len(v)))
 for i in range(len(v)):
     for j in range(len(v)):
         sign_stats[i][j] = sign_stat(v[i], v[j])
 
-print "sign_stats", sign_stats
+print "v:", v
+print "sign_stats:\n", sign_stats.astype(int)
 
 # check if there exists a consistent partition of these vertices
 #   i.e. sign_stat[v_i, v_j] > 0 iff v_i and v_j are in the same community
@@ -107,16 +120,16 @@ for i in range(2**len(v)):
         continue
     partition = True
     for u in split1:
-        for v in split2:
-            if sign_stats[u][v] > 0:
+        for w in split2:
+            if sign_stats[u][w] > 0:
                 partition = False
     for u in split1:
-        for v in split1:
-            if sign_stats[u][v] <= 0:
+        for w in split1:
+            if sign_stats[u][w] <= 0:
                 partition = False
     for u in split2:
-        for v in split2:
-            if sign_stats[u][v] <= 0:
+        for w in split2:
+            if sign_stats[u][w] <= 0:
                 partition = False
     
     if partition:
