@@ -87,7 +87,8 @@ for i in range(len(v)):
     for j in range(len(v)):
         sign_stats[i][j] = sign_stat(v[i], v[j])
 
-print "sign_stats", sign_stats
+
+print "sign_stats", sign_stats.astype(int)
 
 # check if there exists a consistent partition of these vertices
 #   i.e. sign_stat[v_i, v_j] > 0 iff v_i and v_j are in the same community
