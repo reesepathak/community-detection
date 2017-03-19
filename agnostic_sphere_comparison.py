@@ -195,11 +195,7 @@ for i in range(2**len(v)):
         for v in split2:
             if sign_stats[u][v] <= 0:
                 partition = False
-    if not np.all(signs == signs.T):
-        raise ValueError("Signs not symmetric")
 
-    A = [indices[0]]
-    B = []
     
     for i in indices[1:]:
         if np.all(signs[i,A]) and not np.any(signs[i,B]):
