@@ -150,11 +150,52 @@ def partition(vertices, stats):
     signs = (stats > 0)
     indices = np.arange(len(vertices))
 
-    if not np.all(signs == signs.T):
-        raise ValueError("Signs not symmetric")
+# try to find a partition such that sign_stat(v_i, v_j) > 0 
+#   iff v_i and v_j are in the same community
+#   if we can't, fail
+#   if we can, pick a random node from each community to be our anchor
+#
 
-    A = [indices[0]]
-    B = []
+# select 5 vertices randomly and compute pairwise sign statistics
+v = random.sample(xrange(n), 5)
+sign_stats = np.zeros((len(v), len(v)))
+for i in range(len(v)):
+    for j in range(len(v)):
+        sign_stats[i][j] = sign_stat(v[i], v[j])
+
+
+print "sign_stats", sign_stats.astype(int)
+
+# check if there exists a consistent partition of these vertices
+#   i.e. sign_stat[v_i, v_j] > 0 iff v_i and v_j are in the same community
+for i in range(2**len(v)):
+    split1 = []
+    split2 = []
+    j = i
+    ctr = 0
+    while j:
+        if j%2:
+            split1.append(ctr)
+        else:
+            split2.append(ctr)
+        ctr = ctr+1
+        j >>= 1
+    if not len(split1) or not len(split2):
+        continue
+    partition = True
+    for u in split1:
+        for v in split2:
+            if sign_stats[u][v] > 0:
+                partition = False
+    for u in split1:
+        for v in split1:
+            if sign_stats[u][v] <= 0:
+                partition = False
+    for u in split2:
+        for v in split2:
+            if sign_stats[u][v] <= 0:
+                partition = False
+
     
     for i in indices[1:]:
         if np.all(signs[i,A]) and not np.any(signs[i,B]):
