@@ -1,5 +1,5 @@
 import networkx as nx
-import math
+import math, random
 
 def basis(size, index):
 	vec = np.zoers(size)
@@ -57,3 +57,22 @@ def intercluster_connectivity(res):
 	nodes0 = len([i for (i,j) in res.nodes_iter(data=True) if j['value']==0])
 	p = num_edges/(nodes1*nodes0)
 	return [p, p]
+
+def unreliable_graph_classification(G, c, m, eps, x, evals, evecs):
+	edgeset = G.edges()
+	n = G.number_of_nodes()
+	sub_edges = set([])
+	for e in edgeset:
+		if random.random() <= c:
+			subset.add(e)
+	sub_verts = random.sample(G.nodes(), m)
+	val = np.log(n)/np.log(1.0*(1 - c)*evals[0])
+	r = (1.0 - eps/3.0)*val
+	s = 2.0*(eps/3.0)*val
+	result_dict = {}
+	for i in range(len(sub_verts)):
+		for j in range(len(sub_vrts)):
+			result_dict[i,j] = vertex_comparison(sub_verts[i], sub_verts[j], 
+									   		     r, s, sub_edges, x)
+	
+
