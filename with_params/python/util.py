@@ -56,17 +56,19 @@ def shortest_paths(r, G, v):
 	rnn = set([n for n in paths if paths[n] == r])
 	return rnn
 
-def vertex_comparison(u, v, r, s, edge_subset, x, c, evals, n, p, list_r, N_s):
+def vertex_comparison(u, v, r, s, E, x, c, evals, n, p, list_r, N_s):
     assert(0 <= c <= 1)
     eta = np.shape(evals)[1] if evals[-1] != 0 else np.shape(evals)[1]-1
-    temp = np.transpose(np.vander((1-c)*evals, r + s + eta, increasing=True))
     
     # compute constraint matrix 
+    temp = np.transpose(np.vander((1-c)*evals, r + s + eta, increasing=True))
     matrix = temp[(r + s + 1):, (r + s + 1):]
+
+    # compile vector constraints
     coeff = (((1-c)*n)/c)
-    b_uv = coeff * [compute_N(r+j, s, edge_subset, u, v) for j in range(eta)]
-    b_uu = coeff * [compute_N(r+j, s, edge_subset, u, u) for j in range(eta)]
-    b_vv = coeff * [compute_N(r+j, s, edge_subset, v, v) for j in range(eta)]
+    b_uv = coeff * [N_intersect(list_r[r+j,0], N_s[1], E) for j in range(eta)]
+    b_uu = coeff * [N_intersect(list_r[r+j,0], N_s[0], E) for j in range(eta)]
+    b_vv = coeff * [N_intersect(list_r[r+j,1], N_s[1], E) for j in range(eta)]
     
     # LLS to compute z
     z_uv = np.linalg.solve(matrix, b_uv)
@@ -79,7 +81,36 @@ def vertex_comparison(u, v, r, s, edge_subset, x, c, evals, n, p, list_r, N_s):
     threshold = 5*(2*x*(1.0/np.sqrt(p_min)) + math.pow(x, 2))
     return len([i for i in range(eta) if lhs[i] > threshold]) > 0
 
-def unreliable_graph_classification(G, c, m, eps, x, evals, evecs):
+def vertex_classification(centers, v, N_list, r, s, E, evals, c, x, p, list_r, N_sv):
+	coeff = 1.0*(1-c)*n
+	coeff /= c
+	z_cs = []
+	z_vs = []
+	for (i, vc) in enumerate(centers):
+		temp = np.transpose(np.vander((1-c)*evals, r + s + eta, increasing=True))
+		matrix = temp[(r + s + 1):, (r + s + 1):]
+		b_v = coeff*[N_intersect(list_r[r+j, i], N_sv, E) for j in range(eta)]
+		b_c = coeff*[N_intersect(list_r[r+j, i], list_r[s, i], E) for j in range(eta)]
+		z_vs.append(np.linalg.solve(matrix, b_v))
+		z_cs.append(np.linalg.solve(matrix, b_c))
+	p_min = np.min(np.array(p))
+	threshold = (19.0/3.0)*(2*x*(1.0/np.sqrt(p_min)) + math.pow(x, 2))
+	for sig in range(len(centers)):
+		for sig2 in range(len(centers)):
+			if sig == sig2: 
+				continue
+			value = z_cs[sig] - z_cs[sig2] - 2*z_vs[sig] +2*z_vs[sig2]
+			ret_val = True
+			for elem in range(np.shape(value)[0]):
+				if elem > threshold:
+					ret_val = False 
+					break
+			if ret_val:
+				return True
+	return False
+
+
+def unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p):
 	
 	def collect_shortest_path(threshold, m, resnet, verts):
 		result = np.zeros((threshold, m))
@@ -111,12 +142,33 @@ def unreliable_graph_classification(G, c, m, eps, x, evals, evecs):
 	resnet.remove_edges_from(sub_edges)
 	N_table = collect_shortest_path(r + s, m, resnet, sub_verts)
 	result_dict = {}
-	for i in range(len(sub_verts)):
-		for j in range(len(sub_vrts)):
-			list_r = N_table[:, i]
-			N_s = N_table[s, j]
-			result_dict[i,j] = vertex_comparison(sub_verts[i], sub_verts[j], 
+	for i in range(m):
+		for j in range(m):
+			list_r = N_table[:, (i,j)]
+			N_s = [N_table[s, i], N_table[s, j]]
+			result_dict[i,j] = vertex_comparison(sub_verts[i], 
+												 sub_verts[j], 
 									   		     r, s, sub_edges, x, c, 
 									   		     evals, n, p, 
 									   		     list_r, N_s)
+	# assume k = 2 
+	assert(eta == 2)
+	
+	# Step 6
+	centers = None
+	for i in range(m):
+		for j in range(m):
+			if not result_dict[i,j]:
+				centers = [sub_verts[i], sub_verts[j]]
+	assert(centers)
 
+	# Step 7
+	full_table = collect_shortest_path(s, n, resnet, G.nodes())
+	final_classes = {}
+	for v in G.nodes():
+		list_r = full_table[:,(*centers)]
+		N_sv = full_table[s, v]
+		final_classes[v] = vertex_classification(centers, v, 
+												 r, s, sub_edges,
+												 evals, c, x, p, list_r, N_sv)
+	return final_classes
