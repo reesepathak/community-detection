@@ -20,3 +20,19 @@ remaining_edges = G.number_of_edges() - left.number_of_edges() - right.number_of
 inter_prob = remaining_edges*1.0/(num_left*num_right)
 Q = np.diag(q_diag)
 Q[0,1] = Q[1,0] = inter_prob
+
+# Compute eigenvalues/vectors
+evecs, evals = np.linalg.inv(np.diag(p)*Q)
+
+# Parameters
+c = 1e-3
+k = 2
+m = int(np.log(4*k)/min(p))
+print(m)
+eps = 0.9
+n = G.number_of_nodes()
+x = 1e-3
+num_iters = int(np.log(n))
+
+# run experiment
+reliable_graph_classification(G, c, m, eps, x, num_iters, evals, evecs, p)

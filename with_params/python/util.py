@@ -1,6 +1,7 @@
 import networkx as nx
 import math, random
 from itertools import product as cprod
+import numpy as np
 
 def basis(size, index):
 	vec = np.zoers(size)
@@ -113,6 +114,7 @@ def vertex_classification(centers, v, N_list, r, s, E, evals, c, x, p, list_r, N
 def unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p):
 	
 	def collect_shortest_path(threshold, m, resnet, verts):
+		print(threshold)
 		result = np.zeros((threshold, m))
 		for t in range(1, threshold):
 			for i in range(m):
@@ -129,13 +131,14 @@ def unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p):
 	sub_edges = set([])
 	for e in edgeset:
 		if random.random() <= c:
-			subset.add(e)
+			sub_edges.add(e)
 	sub_verts = random.sample(G.nodes(), m)
 
 	# compute parameters 
 	val = np.log(n)/np.log(1.0*(1 - c)*evals[0])
-	r = (1.0 - eps/3.0)*val - eta
+	r = (1.0 - (eps/3.0))*val - eta
 	s = 2.0*(eps/3.0)*val
+	print(r, s)
 	
 	# create residual network (remove selected edges)
 	resnet = G.copy()
@@ -164,11 +167,42 @@ def unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p):
 
 	# Step 7
 	full_table = collect_shortest_path(s, n, resnet, G.nodes())
-	final_classes = {}
+	final_classes = []
 	for v in G.nodes():
-		list_r = full_table[:,(*centers)]
+		list_r = full_table[:, centers]
 		N_sv = full_table[s, v]
-		final_classes[v] = vertex_classification(centers, v, 
+		final_classes.append(vertex_classification(centers, v, 
 												 r, s, sub_edges,
-												 evals, c, x, p, list_r, N_sv)
+												 evals, c, x, p, list_r, N_sv))
 	return final_classes
+
+def reliable_graph_classification(G, c, m, eps, x, num_iters, evals, evecs, p):
+	unreliables = []
+	
+	def disagreement(assign1, assign2):
+		size = np.shape(assign1)[0]
+		return (n - np.max(np.shape(np.where(assign1 == assign2))[0],
+			  		   		  np.shape(np.where(assign1 != assign2))[0]))/(n*1.0)
+
+	for _ in range(num_iters):
+		unreliables.append(unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p))
+
+	good_assigns = []
+	threshold = 4*len(evals)*np.exp(-1.0*(1-c)*(evals[-1]**2)*min(p)/(16*evals[0]*2*(1 + x)))
+	threshold /= (1 - exp((-1.0*(1-c)*(evals[-1]**2)*min(p)/(16*evals[0]*2*(1 + x)))*((1-c)*math.pow(evals[-1], 4)/(4*math.pow(evals[0],3)))))
+	for res in unreliables:
+		num_disagreement = 0
+		for res2 in unreliables:
+			if res == res2:
+				continue
+			dis = disagreement(res, res2)
+			if dis > threshold:
+				num_disagreement += 1
+		if num_disagreement <= 0.5*(len(unreliables) - 1):
+			good_assigns.append(res)
+	good_assigns = np.array(good_assigns)
+	final_assign = []
+	for i in range(np.shape(good_assigns)[1]):
+		final_assign.append(random.choice(list(good_assigns[:, i])))
+	return final_assign
+
