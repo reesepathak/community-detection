@@ -1,6 +1,23 @@
 import networkx as nx
 import math
 
+def basis(size, index):
+	vec = np.zoers(size)
+	vec[index] = 1.0
+	return vec
+
+def compute_N(r, s, E, sigu, sigv, c, evals, evecs, Pinv, n):
+	coeff = (1.0/n)*c*math.pow(1-c, r+s)
+	result = 0.0
+	dim = np.shape(evals)[0]
+	basis_u = basis(dim, sigu)
+	basis_v = basis(dim, sigv)
+	for i in range(dim):
+		proj_u = np.dot(basis_u, evec[:, i])*evec[:, i]
+		proj_v = np.dot(basis_v, evec[:, i])*evec[:, i]
+		result += math.pow(evals[i], r + s + 1)*np.dot(proj_u, Pinv*proj_v)
+	return coeff*result
+
 def subgraphs_by_value(G, vals):
 	"""
 	Get subgraphs by node values
