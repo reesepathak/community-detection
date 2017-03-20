@@ -5,9 +5,12 @@
 import numpy as np
 import random
 
-def gen_SBM(n, k, W):
+SBM_LIN = 0
+SBM_LOG = 1
+
+def gen_sbm(n, k, W):
     """
-    gen_SBM: Generate a graph according to SBM(n, k, W)
+    gen_sbm: Generate a graph according to SBM(n, k, W)
 
     Parameters
     ----------
@@ -27,7 +30,8 @@ def gen_SBM(n, k, W):
     # Assign labels:
     labels = np.zeros(n, dtype = int)
     for i in range(n):
-        labels[i] = np.random.choice(n, size = 1, replace = True, p = k)
+        labels[i] = np.random.choice(range(len(k)), size = 1, 
+                                     replace = True, p = k)
 
     # Iterate over all possible edges:
     edges = []
@@ -38,4 +42,39 @@ def gen_SBM(n, k, W):
                 edges.append({i, j})
     return (labels, edges)
 
+def gen_sym_sbm(n, k, a, b, regime=SBM_LIN):
+    """
+    gen_sym_sbm: Generate a graph according to the symmetric SBM model
+                 in the linear or logarithmic regime.
+
+    Parameters
+    ----------
+    n - int - the number of nodes.
+    k - int - the number of clusters.
+    a - float - Constant determining in-group edge probability.
+    b - float - Constant determining out-group edge probability.
+    regime - SBM_LIN or SBM_LOG
+           - If Q = [a b b ... b
+                     b a b ... b
+                     b b a ... b
+                     . . . ... .
+                     b b b ... a] 
+            then
+           - In SBM_LIN, W = Q/n
+           - In SBM_LOG, W = Q*ln(n)/n where ln is the natural logarithm.
+
+    Returns
+    -------
+    labels - numpy vector describing the labels of the nodes 0, 1, ..., n-1
+    edges - set of edges. Every edge is a set {i, j} indicating that an edge
+            goes from i to j. Edges are not directed.
+    """
+    k_vec = np.ones(k)/k
+    Q = np.diag((a-b)*np.ones(k)) + b*np.ones((k, k))
+    if regime == SBM_LIN:
+        return gen_sbm(n, k_vec, Q/n)
+    elif regime == SBM_LOG:
+        return gen_sbm(n, k_vec, Q*np.log(n)/n)
+    else:
+        raise ValueError("'regime' must be either 'SBM_LIN' or 'SBM_LOG'")
 
