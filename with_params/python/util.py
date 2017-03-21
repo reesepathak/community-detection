@@ -2,15 +2,16 @@ import networkx as nx
 import math, random
 from itertools import product as cprod
 import numpy as np
+import pdb
 
 def basis(size, index):
-	vec = np.zoers(size)
+	vec = np.zeros(size)
 	vec[index] = 1.0
 	return vec
 
 def N_intersect(N_r, N_s, E):
 	set_list = [N_r, N_s]
-	return len(E.intersection(cprod(*setlist)))
+	return len(E.intersection(cprod(*set_list)))
 
 def subgraphs_by_value(G, vals):
 	"""
@@ -25,9 +26,6 @@ def subgraphs_by_value(G, vals):
 def get_conn_prob(G):
 	n = G.number_of_nodes()
 	return 2*G.number_of_edges()/(1.0*n*(n-1))
-	# degs = G.degree().values()
-	# avg_num_neighbors = sum(degs)/(1.0 * len(degs))
-	# return avg_num_neighbors/G.number_of_nodes()
 
 def get_residual_network(G, vals):
 	"""
@@ -53,23 +51,25 @@ def intercluster_connectivity(res):
 	return [p, p]
 
 def shortest_paths(r, G, v):
-	paths = nx.single_source_shortest_path_length(G, v, cutoff=r)
-	rnn = set([n for n in paths if paths[n] == r])
-	return rnn
+	path_lengths = nx.single_source_shortest_path_length(G, v, cutoff=r)
+	near_neighbs = set([int(target) for target in path_lengths if (path_lengths[target] == r)])
+	return near_neighbs
 
 def vertex_comparison(u, v, r, s, E, x, c, evals, n, p, list_r, N_s):
-    assert(0 <= c <= 1)
-    eta = np.shape(evals)[1] if evals[-1] != 0 else np.shape(evals)[1]-1
-    
+    eta = 2    
     # compute constraint matrix 
     temp = np.transpose(np.vander((1-c)*evals, r + s + eta, increasing=True))
     matrix = temp[(r + s + 1):, (r + s + 1):]
 
     # compile vector constraints
     coeff = (((1-c)*n)/c)
-    b_uv = coeff * [N_intersect(list_r[r+j,0], N_s[1], E) for j in range(eta)]
-    b_uu = coeff * [N_intersect(list_r[r+j,0], N_s[0], E) for j in range(eta)]
-    b_vv = coeff * [N_intersect(list_r[r+j,1], N_s[1], E) for j in range(eta)]
+    print(len(list_r[0]))
+    print("r:", r)
+    print("eta:", eta)
+    pdb.set_trace()
+    b_uv = coeff * [N_intersect(list_r[0][r+j], N_s[1], E) for j in range(eta)]
+    b_uu = coeff * [N_intersect(list_r[0][r+j], N_s[0], E) for j in range(eta)]
+    b_vv = coeff * [N_intersect(list_r[1][r+j], N_s[1], E) for j in range(eta)]
     
     # LLS to compute z
     z_uv = np.linalg.solve(matrix, b_uv)
@@ -114,16 +114,19 @@ def vertex_classification(centers, v, N_list, r, s, E, evals, c, x, p, list_r, N
 def unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p):
 	
 	def collect_shortest_path(threshold, m, resnet, verts):
-		print(threshold)
-		result = np.zeros((threshold, m))
-		for t in range(1, threshold):
+		print(threshold, m)
+		result = [[set([]) for _ in range(threshold)] for _ in range(m)]
+		print(len(result), len(result[0]))
+		for t in range(threshold):
 			for i in range(m):
-				result[t, i] = shortest_paths(t, resnet, verts[i])
+				print(t, resnet, verts[i])
+				sps = shortest_paths(t, resnet, verts[i])
+				result[i][t] = sps
 		return result
-
-	eta = np.shape(evals)[0] if evals[-1] != 0 else (np.shape(evals)[0] - 1)
+	eta = 2
+	#eta = np.shape(evals)[0] if evals[-1] != 0 else (np.shape(evals)[0] - 1)
 	# TODO: deal with underdetermined case
-	assert(eta == np.shape(evals)[0])
+	#assert(eta == np.shape(evals)[0])
 
 	# grab random edge and vertex subset 
 	edgeset = G.edges()
@@ -132,31 +135,36 @@ def unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p):
 	for e in edgeset:
 		if random.random() <= c:
 			sub_edges.add(e)
-	sub_verts = random.sample(G.nodes(), m)
-
+	sub_verts = np.random.choice(G.nodes(), size=m, replace=False)
 	# compute parameters 
 	val = np.log(n)/np.log(1.0*(1 - c)*evals[0])
 	r = (1.0 - (eps/3.0))*val - eta
 	s = 2.0*(eps/3.0)*val
-	print(r, s)
 	
 	# create residual network (remove selected edges)
 	resnet = G.copy()
 	resnet.remove_edges_from(sub_edges)
-	N_table = collect_shortest_path(r + s, m, resnet, sub_verts)
+	N_table = collect_shortest_path(int(r + eta), m, resnet, sub_verts)
+	print(int(r+eta), m)
+	print(len(N_table))
+	print(len(N_table[0][:]))
 	result_dict = {}
 	for i in range(m):
 		for j in range(m):
-			list_r = N_table[:, (i,j)]
-			N_s = [N_table[s, i], N_table[s, j]]
+			list_r = [N_table[i], N_table[j]]
+			# todo is s right?
+			s = int(s)
+			N_s = [N_table[i][s], N_table[j][s]]
 			result_dict[i,j] = vertex_comparison(sub_verts[i], 
 												 sub_verts[j], 
-									   		     r, s, sub_edges, x, c, 
+									   		     int(r), int(s), sub_edges, x, c, 
 									   		     evals, n, p, 
 									   		     list_r, N_s)
+	
+
 	# assume k = 2 
 	assert(eta == 2)
-	
+
 	# Step 6
 	centers = None
 	for i in range(m):
@@ -177,6 +185,9 @@ def unreliable_graph_classification(G, c, m, eps, x, evals, evecs, p):
 	return final_classes
 
 def reliable_graph_classification(G, c, m, eps, x, num_iters, evals, evecs, p):
+	"""
+	Same as Sphere-Comparison
+	"""
 	unreliables = []
 	
 	def disagreement(assign1, assign2):
