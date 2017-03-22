@@ -3,6 +3,7 @@ import numpy as np
 from math import log, ceil
 from itertools import combinations
 import networkx as nx
+import sbm
 
 random.seed(1)
 
@@ -23,6 +24,12 @@ for row, line in enumerate(data):
         e = (v1, v2) if v1 < v2 else (v2, v1)
         raw_edges.add(e)
 
+n = 1500
+k = 2
+a = 10
+b = 2
+labels, raw_edges = sbm.gen_sym_sbm(n, k, a, b)
+
 # use networkx to find the largest component
 G = nx.Graph()
 G.add_edges_from(raw_edges)
@@ -30,6 +37,7 @@ Gc = max(nx.connected_component_subgraphs(G), key=len)
 edges = set(Gc.edges())
 nodes = Gc.nodes()
 max_node = max(nodes)
+print len(G)
 
 d = 2.0 * len(edges) / len(nodes)
 

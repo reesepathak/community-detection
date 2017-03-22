@@ -78,3 +78,4 @@ def gen_sym_sbm(n, k, a, b, regime=SBM_LIN):
     else:
         raise ValueError("'regime' must be either 'SBM_LIN' or 'SBM_LOG'")
 
+
