@@ -41,7 +41,7 @@ print("Evecs, evals", evecs, evals)
 # Parameters
 c = 1e-3
 k = 2
-m = int(np.log(4*k)/min(p))
+m = int(np.log(4.0*k)/min(p))
 eps = 0.001
 x = 1e-3
 num_iters = int(np.log(n))
