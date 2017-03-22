@@ -15,8 +15,6 @@ blog_dataset = Graph(blog_dataset)
 println("Obtaining a classification of nodes")
 meanDegree = sum(adjacency_matrix(blog_dataset))/(nv(blog_dataset))
 println("Mean degree is $meanDegree")
-# for _ in 1:2
-#     result = repeat_unreliable_class(blog_dataset, meanDegree, 15)
-#     println(length(result), sum(result))
-# end
-print(repeat_unreliable_class(blog_dataset, meanDegree, 15))
+for _=1:5
+    println(sum(repeat_unreliable_class(blog_dataset, meanDegree)))
+end
