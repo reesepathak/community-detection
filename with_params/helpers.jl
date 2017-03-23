@@ -1,5 +1,18 @@
-Pkg.add("LightGraphs")
 using LightGraphs, StatsBase
+
+function return_classtable(fname)
+    file = open(fname)
+    ground_truth_classes = []
+    for line in eachline(file)
+        line = split(strip(line)) # removes white space
+        if line[1] == "value"
+            push!(ground_truth_classes, convert(Int64, parse(Int64, line[2])))
+        end
+    end
+    return ground_truth_classes
+end
+
+
 
 function findNeighborhood(graph, source, size)
     selfset = Set{Int64}([source])
@@ -98,15 +111,18 @@ function unreliableClassification(graph, meanDegree)
     return output
 end
 
+function evaluateAgreement(class1, class2, class3)
+    return sum(1.0*(class1 .== class2 .== class3))
+end
+
+
 #Runs classify 3 times and refines these classification using the classifications of the vertices' neighbors.
 #Then it assigns each vertex a community based on a majority vote.
-function repeat_unreliable_class(graph, meanDegree, nTrials, numRefine=7)
+function repeat_unreliable_class(graph, meanDegree, numRefine=7)
     classes = []
-    for nT=1:nTrials
-        println("Trial $nT.....")
-        println("Computing unreliable classification ....")
+    for nT=1:3
+        print("...")
         curr_result = unreliableClassification(graph, meanDegree)
-        println("....................................  Done")
         for _ in 1:numRefine # 7 refinement steps
             newClasses = -1*ones(length(curr_result))
             for i=1:nv(graph)
@@ -123,13 +139,86 @@ function repeat_unreliable_class(graph, meanDegree, nTrials, numRefine=7)
         end
         push!(classes, copy(curr_result))
     end
-    for classif in classes
-        sum_class = sum(classif)
-        println("classification: $sum_class")
+
+    c1, c2, c3 = classes
+    # computing majority over permutations
+    c2_swap = 1 - c2
+    c3_swap = 1 - c3
+    ag_max = -1
+    ag1 = evaluateAgreement(c1, c2, c3)
+    ag2 = evaluateAgreement(c1, c2, c3_swap)
+    ag3 = evaluateAgreement(c1, c2_swap, c3)
+    ag4 = evaluateAgreement(c1, c2_swap, c3_swap)
+    if (ag1 > ag_max)
+        ag_max = ag1 
+        best = (c1, c2, c3)
     end
-    # output = (sign(sum(classes)/nTrials - 0.5) + 1)/2
-    return nothing
+    if (ag2 > ag_max)
+        ag_max = ag2 
+        best = (c1, c2, c3_swap)
+    end
+    if (ag3 > ag_max)
+        ag_max = ag3 
+        best = (c1, c2_swap, c3)
+    end
+    if (ag4 > ag_max)
+        ag_max = ag4 
+        best = (c1, c2_swap, c3_swap)
+    end
+    return 1.0*(mean(best) .> 0.5)
 end
+
+function repeater(graph, meanDegree, numRefine=7)
+    classes = []
+    for nT=1:3
+        print("Issuing call to small repeater, trial $nT")
+        curr_result = repeat_unreliable_class(graph, meanDegree)
+        println("... DONE")
+        for _ in 1:numRefine # 7 refinement steps
+            newClasses = -1*ones(length(curr_result))
+            for i=1:nv(graph)
+                diff = sum(2*filter(x->x!=nothing, curr_result[neighbors(graph,i)])-1)
+                if diff > 0
+                    newClasses[i] = 1
+                elseif diff < 0
+                    newClasses[i] = 0
+                elseif diff == 0
+                    newClasses[i] = sample(0:1)
+                end
+            end
+            curr_result = newClasses
+        end
+        push!(classes, copy(curr_result))
+    end
+
+    c1, c2, c3 = classes
+    # computing majority over permutations
+    c2_swap = 1 - c2
+    c3_swap = 1 - c3
+    ag_max = -1
+    ag1 = evaluateAgreement(c1, c2, c3)
+    ag2 = evaluateAgreement(c1, c2, c3_swap)
+    ag3 = evaluateAgreement(c1, c2_swap, c3)
+    ag4 = evaluateAgreement(c1, c2_swap, c3_swap)
+    if (ag1 > ag_max)
+        ag_max = ag1 
+        best = (c1, c2, c3)
+    end
+    if (ag2 > ag_max)
+        ag_max = ag2 
+        best = (c1, c2, c3_swap)
+    end
+    if (ag3 > ag_max)
+        ag_max = ag3 
+        best = (c1, c2_swap, c3)
+    end
+    if (ag4 > ag_max)
+        ag_max = ag4 
+        best = (c1, c2_swap, c3_swap)
+    end
+    return 1.0*(mean(best) .> 0.5)
+end
+
     # c1, c2, c3 = classes
 
     # final1, final2, final3 = nothing, nothing, nothing 
