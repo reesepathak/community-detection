@@ -1,12 +1,19 @@
 include("helpers.jl")
 using LightGraphs, HDF5
+include("sbm.jl")
 
 FNAME = "data/polblogs.gml"
-println("Loading Political Blog Dataset ....")
-original = loadgraph(FNAME, :gml)
-true_classes = return_classtable(FNAME)
+# println("Loading Political Blog Dataset ....")
+# original = loadgraph(FNAME, :gml)
+# true_classes = return_classtable(FNAME)
+
+println("Generating SBM...")
+labels, edgeSet = gen_sym_sbm(1200, 2, 7, 0.7, regime=SBM_LOG)
+original, true_classes = to_lightgraph(labels, edgeSet)
+
 println("Finding Largest Connected Component")
-ccs = weakly_connected_components(original)
+# ccs = weakly_connected_components(original)
+ccs = connected_components(original)
 largest_cc = ccs[indmax(map(x->size(x)[1], ccs))]
 println("Obtaining Subgraph for Largest Connected Component")
 blog_dataset, _ = induced_subgraph(original, largest_cc)
