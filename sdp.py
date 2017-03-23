@@ -73,12 +73,16 @@ def main():
     prob = cvx.Problem(cvx.Maximize(objective), constraints)
 
     print "Solving SDP..."
-    prob.solve(solver = "SCS", verbose = True)
+    prob.solve(solver = "MOSEK", verbose = True)
     print "Done."
 
     ## By paper, X is the outer product of some vector.
-    e_vals, e_vecs = np.linalg.eigs(X)
-    print e_vecs[0]
+    print X.value
+    e_vals, e_vecs = np.linalg.eig(X.value)
+    correct = np.sign(e_vecs[0]) == np.array([G.node[v]['label'] for v in G.nodes()])
+
+    print "accuracy: ", max(np.sum(correct), n - np.sum(correct))/float(n)
+
 
 if __name__ == "__main__":
     main()
