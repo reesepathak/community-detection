@@ -1,14 +1,15 @@
+# approach_ch_threshold.jl
+# For Mark's data collection purposes
+
 include("helpers.jl")
-using LightGraphs, HDF5
+using LightGraphs, PyPlot
+using HDF5
 include("sbm.jl")
 
-# FNAME = "data/polblogs.gml"
-# println("Loading Political Blog Dataset ....")
-# original = loadgraph(FNAME, :gml)
-# true_classes = return_classtable(FNAME)
-function main()
-    println("Generating SBM...")
-    labels, edgeSet = gen_sym_sbm(1200, 2, 20, 0.2, regime=SBM_LOG)
+function main(n, k, a, b)
+    nstr = string(n); kstr = string(k); astr = string(a); bstr = string(b);
+    println("Generating SBM... n = $nstr, k = $kstr, a = $astr, b = $bstr")
+    labels, edgeSet = gen_sym_sbm(n, k, a, b, regime=SBM_LOG)
     original, true_classes = to_lightgraph(labels, edgeSet)
 
     println("Finding Largest Connected Component")
@@ -27,7 +28,7 @@ function main()
     meanDegree = sum(adjacency_matrix(blog_dataset))/(nv(blog_dataset))
     println("Mean degree is $meanDegree")
 
-    numTrials = 40
+    numTrials = 3
     cluster_sizes = []
     accuracies = []
     classifications = []
@@ -45,10 +46,47 @@ function main()
         println("...\t Accuracy: $acc_rate_final")
     end
 
-    outfile = "results.h5"
-    h5write(outfile, "accuracies", accuracies)
-    h5write(outfile, "cluster_sizes", cluster_sizes)
-    h5write(outfile, "classifications", classifications)
-end
-main()
+    # outfile = "threshold/results_$(astr)_$(bstr).h5"
+    # h5write(outfile, "accuracies_$(astr)_$(bstr)", accuracies)
+    # h5write(outfile, "cluster_sizes_$(astr)_$(bstr)", cluster_sizes)
+    # h5write(outfile, "classifications_$(astr)_$(bstr)", classifications)
 
+    # Return the average accuracy:
+    return mean(accuracies)
+end
+amin = 1; amax = 10
+bmin = 0.02; bmax = 1
+avec = linspace(amin, amax, 40)
+bvec = linspace(bmin, bmax, 40)
+n = 300
+k = 2
+accuracygrid = zeros(length(avec), length(bvec))
+for i in 1:length(avec)
+    for j in 1:length(bvec)
+        accuracygrid[i,j] = main(n, k, avec[i], bvec[j])
+    end
+end
+println("Writing to file...")
+h5write("threshold_$(amin)_$(amax)_$(bmin)_$(bmax).h5", "accuracies", accuracygrid)
+# accuracygrid = h5read("threshold.h5", "accuracies")
+
+# Plot Output
+xs = [string(elem) for elem in avec]
+ys = [string(elem) for elem in bvec]
+z = accuracygrid
+
+# Plot
+fig, ax = subplots()
+# Accuracy
+pcolormesh(bvec, avec, accuracygrid, cmap=ColorMap("Blues"))
+
+# Superimpose threshold
+thresh = (sqrt(2) + sqrt(bvec)).^2
+plot(bvec, thresh, color = "red", linestyle="-")
+xlim([bmin, bmax])
+ylim([amin, amax])
+xlabel("b")
+ylabel("a")
+colorbar()
+title("Plot of recovery accuracy for various values of a, b")
+savefig("accuracy.png")
